@@ -177,9 +177,6 @@ func buildQuery(name string, qtype uint16) []byte {
 	}
 	buf = append(buf, 0)
 	buf = append(buf, 0, byte(qtype>>8), byte(qtype), 0, 0x01)
-	// EDNS0 OPT — VPC Route 53 often expects this
-	binary.BigEndian.PutUint16(buf[10:12], 1)
-	buf = append(buf, 0, 0, 41, 0x04, 0xd0, 0, 0, 0, 0, 0, 0)
 	return buf
 }
 

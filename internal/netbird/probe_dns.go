@@ -24,7 +24,7 @@ func ProbeDNSOverTCP(ctx context.Context, c *embed.Client, resolver, name string
 	r := &dns.Resolver{Server: resolver, Dial: c}
 	log.Printf("dns-over-tcp probe: %s via %s (after mesh route delay)", name, resolver)
 	select {
-	case <-time.After(8 * time.Second):
+	case <-time.After(12 * time.Second):
 	case <-ctx.Done():
 		return
 	}
