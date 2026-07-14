@@ -3,6 +3,7 @@ package config
 import (
 	"flag"
 	"fmt"
+	"net"
 	"strconv"
 	"strings"
 )
@@ -26,6 +27,8 @@ type Config struct {
 	StateDir      string
 	LogLevel      string
 	MTU           int
+	DNSOverTCP    bool
+	DNSResolver   string
 }
 
 // option declares one CLI flag and the env-var aliases that may override its
@@ -72,6 +75,9 @@ func Load(args []string, getenv func(string) string) (Config, error) {
 			help: "NetBird tunnel MTU in bytes (0 = NetBird default 1280; valid 576-8192)", target: &mtuStr},
 	}
 
+	dnsTCPStr := firstNonEmpty(getenv, []string{"NB_DNS_OVER_TCP"}, "")
+	dnsResStr := firstNonEmpty(getenv, []string{"NB_DNS_RESOLVER"}, "10.32.0.2:53")
+
 	fs := flag.NewFlagSet("railbird", flag.ContinueOnError)
 	for _, o := range opts {
 		fs.StringVar(o.target, o.flag, firstNonEmpty(getenv, o.envs, o.def), o.help)
@@ -104,6 +110,17 @@ func Load(args []string, getenv func(string) string) (Config, error) {
 		cfg.MTU = mtu
 	}
 
+	cfg.DNSOverTCP = dnsOverTCPOn(dnsTCPStr)
+	if cfg.DNSOverTCP {
+		cfg.DNSResolver = strings.TrimSpace(dnsResStr)
+		if cfg.DNSResolver == "" {
+			cfg.DNSResolver = "10.32.0.2:53"
+		}
+		if _, _, err := net.SplitHostPort(cfg.DNSResolver); err != nil {
+			cfg.DNSResolver = net.JoinHostPort(cfg.DNSResolver, "53")
+		}
+	}
+
 	return cfg, nil
 }
 
@@ -119,6 +136,15 @@ func firstNonEmpty(getenv func(string) string, envs []string, def string) string
 }
 
 // splitTrim splits s by sep, trims each element, and drops empties.
+func dnsOverTCPOn(v string) bool {
+	switch strings.ToLower(strings.TrimSpace(v)) {
+	case "1", "true", "yes", "on":
+		return true
+	default:
+		return false
+	}
+}
+
 func splitTrim(s, sep string) []string {
 	if s == "" {
 		return nil

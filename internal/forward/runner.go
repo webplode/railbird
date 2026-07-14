@@ -25,7 +25,7 @@ type MeshClient interface {
 //
 //	ingress  listener binds on the mesh,  dial is local
 //	egress   listener binds locally,      dial goes through the mesh
-func Run(ctx context.Context, c MeshClient, f Forward, mode config.Mode) error {
+func Run(ctx context.Context, c MeshClient, f Forward, mode config.Mode, res HostResolver) error {
 	ln, err := listen(c, f.ListenPort, mode)
 	if err != nil {
 		return err
@@ -48,7 +48,7 @@ func Run(ctx context.Context, c MeshClient, f Forward, mode config.Mode) error {
 			continue
 		}
 		log.Printf("accept :%s from %s", f.ListenPort, in.RemoteAddr())
-		go proxy(ctx, c, in, f.Target, mode)
+		go proxy(ctx, c, in, f.Target, mode, res)
 	}
 }
 

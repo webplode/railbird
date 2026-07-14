@@ -123,7 +123,7 @@ func runAsync(ctx context.Context, c MeshClient, f Forward, mode config.Mode) <-
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
-		_ = Run(ctx, c, f, mode)
+		_ = Run(ctx, c, f, mode, nil)
 	}()
 	return done
 }

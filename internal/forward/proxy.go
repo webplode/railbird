@@ -18,10 +18,10 @@ const dialKeepAlive = 30 * time.Second
 // proxy bridges in <-> target until either side closes. Half-close on EOF
 // is best-effort: if the underlying conn doesn't expose CloseWrite the call
 // is silently skipped (e.g. a TLS-wrapped conn).
-func proxy(ctx context.Context, c MeshClient, in net.Conn, target string, mode config.Mode) {
+func proxy(ctx context.Context, c MeshClient, in net.Conn, target string, mode config.Mode, res HostResolver) {
 	defer in.Close()
 
-	out, err := dial(ctx, c, target, mode)
+	out, err := dial(ctx, c, target, mode, res)
 	if err != nil {
 		log.Printf("dial %s: %v", target, err)
 		return
@@ -48,7 +48,14 @@ func proxy(ctx context.Context, c MeshClient, in net.Conn, target string, mode c
 }
 
 // dial picks the right outbound dialer for the given mode.
-func dial(ctx context.Context, c MeshClient, target string, mode config.Mode) (net.Conn, error) {
+func dial(ctx context.Context, c MeshClient, target string, mode config.Mode, res HostResolver) (net.Conn, error) {
+	if mode == config.ModeEgress {
+		resolved, err := ResolveEgressTarget(ctx, target, mode, res)
+		if err != nil {
+			return nil, err
+		}
+		target = resolved
+	}
 	switch mode {
 	case config.ModeIngress:
 		d := net.Dialer{KeepAlive: dialKeepAlive}

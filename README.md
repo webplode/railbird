@@ -65,10 +65,13 @@ otherwise the default.
 | `NB_LOG_LEVEL`                   | `--log-level`    | Optional. NetBird client log level. Defaults to `info`.                                                                                           |
 | `NB_PROBE_ADDR`                  | —                | Optional. After NetBird starts, TCP-dial this host/IP via userspace mesh (logs OK/FAIL). Use on Railway when kernel `ping` is misleading.          |
 | `NB_PROBE_PORTS`                 | —                | Optional. Comma-separated ports for `NB_PROBE_ADDR` (default `80,443`).                                                                           |
+| `NB_DNS_OVER_TCP`                | —                | Optional. `true` to resolve hostnames in egress `FORWARDS` via **DNS-over-TCP** over the mesh (bypasses NetBird UDP to `10.32.0.2`).             |
+| `NB_DNS_RESOLVER`                | —                | Optional. VPC resolver for DNS-over-TCP (default `10.32.0.2:53`).                                                                                 |
+| `NB_PROBE_DNS`                   | —                | Optional. When `NB_DNS_OVER_TCP=true`, resolve this name at startup and log OK/FAIL.                                                              |
 
 _CLI flags take precedence over environment variables._
 
-On platforms without a kernel WireGuard interface (e.g. Railway), the embedded NetBird client uses **userspace** networking: egress `FORWARDS` and `NB_PROBE_*` use mesh `Dial`, not host routes._
+On platforms without a kernel WireGuard interface (e.g. Railway), the embedded NetBird client uses **userspace** networking: egress `FORWARDS` and `NB_PROBE_*` use mesh `Dial`, not host routes. For RDS hostnames, set `NB_DNS_OVER_TCP=true` so railbird queries `10.32.0.2` over **TCP** via the same mesh path._
 
 ### `FORWARDS` syntax
 

@@ -55,12 +55,20 @@ func main() {
 		go netbird.ProbeMeshTCP(ctx, c, probe)
 	}
 
+	res := forward.NewTCPResolver(cfg.DNSOverTCP, cfg.DNSResolver, c)
+	if res != nil {
+		log.Printf("dns-over-tcp enabled via %s (egress hostnames in FORWARDS)", cfg.DNSResolver)
+		if name := strings.TrimSpace(os.Getenv("NB_PROBE_DNS")); name != "" {
+			go netbird.ProbeDNSOverTCP(ctx, c, cfg.DNSResolver, name)
+		}
+	}
+
 	var wg sync.WaitGroup
 	for _, f := range fwds {
 		wg.Add(1)
 		go func(f forward.Forward) {
 			defer wg.Done()
-			if err := forward.Run(ctx, c, f, cfg.Mode); err != nil {
+			if err := forward.Run(ctx, c, f, cfg.Mode, res); err != nil {
 				log.Printf("forward %s: %v", f.ListenPort, err)
 			}
 		}(f)
