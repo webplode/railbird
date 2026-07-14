@@ -2,7 +2,10 @@ module github.com/jratienza65/railbird
 
 go 1.25.5
 
-require github.com/netbirdio/netbird v0.70.5
+require (
+	github.com/miekg/dns v1.1.59
+	github.com/netbirdio/netbird v0.70.5
+)
 
 require (
 	cunicu.li/go-rosenpass v0.4.0 // indirect
@@ -61,7 +64,6 @@ require (
 	github.com/mdlayher/netlink v1.7.3-0.20250113171957-fbb4dce95f42 // indirect
 	github.com/mdlayher/socket v0.5.1 // indirect
 	github.com/mholt/acmez/v2 v2.0.1 // indirect
-	github.com/miekg/dns v1.1.59 // indirect
 	github.com/mitchellh/hashstructure/v2 v2.0.2 // indirect
 	github.com/openbao/openbao/api/v2 v2.5.1 // indirect
 	github.com/petermattis/goid v0.0.0-20250303134427-723919f7f203 // indirect

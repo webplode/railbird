@@ -23,28 +23,11 @@ func TestLookupHost_IPPassthrough(t *testing.T) {
 	}
 }
 
-func TestParseAnswers_A(t *testing.T) {
-	// header: 1 question, 1 answer; question "x.com"; answer CNAME-style ptr + A
-	resp := []byte{
-		0, 0, 0, 0, 0, 1, 0, 1, 0, 0, 0, 0,
-		1, 'x', 3, 'c', 'o', 'm', 0, 0, 1, 0, 1,
-		0xc0, 0x0c, 0, 1, 0, 1, 0, 0, 0, 60, 0, 4, 10, 32, 12, 242,
+func TestClampTTL(t *testing.T) {
+	if clampTTL(1*time.Second) != 30*time.Second {
+		t.Fatal("min ttl")
 	}
-	ips, _, ttl, err := parseAnswers(resp)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(ips) != 1 || ips[0].String() != "10.32.12.242" {
-		t.Fatalf("ips=%v", ips)
-	}
-	if ttl != 60*time.Second {
-		t.Fatalf("ttl=%v", ttl)
-	}
-}
-
-func TestBuildQuery(t *testing.T) {
-	q := buildQuery("a.b.com", 1)
-	if len(q) < 20 {
-		t.Fatalf("short query %d", len(q))
+	if clampTTL(20*time.Minute) != 10*time.Minute {
+		t.Fatal("max ttl")
 	}
 }

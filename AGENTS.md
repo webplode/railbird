@@ -25,6 +25,8 @@ NB_DNS_RESOLVER=10.32.0.2:53
 NB_PROBE_DNS=<same-rds-hostname>
 ```
 
-`NB_STATIC_HOSTS` is a fallback only if VPC DNS-over-TCP still fails after code fixes.
+DNS-over-TCP uses `github.com/miekg/dns` over mesh `Dial` to `NB_DNS_RESOLVER` (hand-built packets caused REFUSED/FORMERR from VPC resolver).
+
+`NB_STATIC_HOSTS` is a fallback only if VPC DNS-over-TCP still fails.
 
 Consumers connect to **`${{railbird.RAILWAY_PRIVATE_DOMAIN}}:5432`** (or `railbird.railway.internal`), not the RDS hostname directly.
