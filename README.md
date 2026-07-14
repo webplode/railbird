@@ -68,6 +68,7 @@ otherwise the default.
 | `NB_DNS_OVER_TCP`                | —                | Optional. `true` to resolve hostnames in egress `FORWARDS` via **DNS-over-TCP** over the mesh (bypasses NetBird UDP to `10.32.0.2`).             |
 | `NB_DNS_RESOLVER`                | —                | Optional. VPC resolver for DNS-over-TCP (default `10.32.0.2:53`).                                                                                 |
 | `NB_PROBE_DNS`                   | —                | Optional. When `NB_DNS_OVER_TCP=true`, resolve this name at startup and log OK/FAIL.                                                              |
+| `NB_STATIC_HOSTS`                | —                | Optional. Comma-separated `host=ip` map (e.g. RDS endpoint → private IP). Checked before DNS-over-TCP.                                            |
 
 _CLI flags take precedence over environment variables._
 

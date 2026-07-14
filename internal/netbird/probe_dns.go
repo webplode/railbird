@@ -22,7 +22,12 @@ func ProbeDNSOverTCP(ctx context.Context, c *embed.Client, resolver, name string
 		resolver = net.JoinHostPort(resolver, "53")
 	}
 	r := &dns.Resolver{Server: resolver, Dial: c}
-	log.Printf("dns-over-tcp probe: %s via %s", name, resolver)
+	log.Printf("dns-over-tcp probe: %s via %s (after mesh route delay)", name, resolver)
+	select {
+	case <-time.After(8 * time.Second):
+	case <-ctx.Done():
+		return
+	}
 	dctx, cancel := context.WithTimeout(ctx, 20*time.Second)
 	defer cancel()
 	ips, err := r.LookupHost(dctx, name)

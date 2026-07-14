@@ -30,7 +30,7 @@ func TestParseAnswers_A(t *testing.T) {
 		1, 'x', 3, 'c', 'o', 'm', 0, 0, 1, 0, 1,
 		0xc0, 0x0c, 0, 1, 0, 1, 0, 0, 0, 60, 0, 4, 10, 32, 12, 242,
 	}
-	ips, ttl, err := parseAnswers(resp)
+	ips, _, ttl, err := parseAnswers(resp)
 	if err != nil {
 		t.Fatal(err)
 	}

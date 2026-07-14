@@ -55,8 +55,13 @@ func main() {
 		go netbird.ProbeMeshTCP(ctx, c, probe)
 	}
 
-	res := forward.NewTCPResolver(cfg.DNSOverTCP, cfg.DNSResolver, c)
-	if res != nil {
+	static := forward.ParseStaticHosts(os.Getenv("NB_STATIC_HOSTS"))
+	if len(static) > 0 {
+		log.Printf("static hosts: %d entries (override DNS-over-TCP)", len(static))
+	}
+	tcpRes := forward.NewTCPResolver(cfg.DNSOverTCP, cfg.DNSResolver, c)
+	res := forward.ChainResolver(static, tcpRes)
+	if tcpRes != nil {
 		log.Printf("dns-over-tcp enabled via %s (egress hostnames in FORWARDS)", cfg.DNSResolver)
 		if name := strings.TrimSpace(os.Getenv("NB_PROBE_DNS")); name != "" {
 			go netbird.ProbeDNSOverTCP(ctx, c, cfg.DNSResolver, name)

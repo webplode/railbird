@@ -67,26 +67,36 @@ func clampTTL(ttl time.Duration) time.Duration {
 }
 
 func (r *Resolver) exchange(ctx context.Context, name string) ([]net.IP, time.Duration, error) {
-	msg := buildQuery(name, 1) // A
-	ips, ttl, err := r.query(ctx, msg)
-	if err == nil && len(ips) > 0 {
-		return ips, ttl, nil
-	}
-	msg = buildQuery(name, 28) // AAAA
-	ips, ttl, err2 := r.query(ctx, msg)
-	if err2 != nil {
-		if err != nil {
-			return nil, 0, err
+	const maxCNAMEFollow = 8
+	cur := strings.TrimSuffix(strings.ToLower(strings.TrimSpace(name)), ".")
+	for hop := 0; hop < maxCNAMEFollow; hop++ {
+		for _, qtype := range []uint16{1, 28} { // A, AAAA
+			ips, cnames, ttl, err := r.query(ctx, buildQuery(cur, qtype))
+			if err != nil {
+				return nil, 0, err
+			}
+			if len(ips) > 0 {
+				return ips, ttl, nil
+			}
+			if len(cnames) > 0 {
+				cur = cnames[0]
+				break
+			}
+			if qtype == 28 {
+				return nil, 0, fmt.Errorf("no A/AAAA for %q", name)
+			}
 		}
-		return nil, 0, err2
+		if hop == maxCNAMEFollow-1 {
+			return nil, 0, fmt.Errorf("cname loop for %q", name)
+		}
 	}
-	return ips, ttl, nil
+	return nil, 0, fmt.Errorf("no addresses for %q", name)
 }
 
-func (r *Resolver) query(ctx context.Context, msg []byte) ([]net.IP, time.Duration, error) {
+func (r *Resolver) query(ctx context.Context, msg []byte) ([]net.IP, []string, time.Duration, error) {
 	conn, err := r.Dial.Dial(ctx, "tcp", r.Server)
 	if err != nil {
-		return nil, 0, fmt.Errorf("dns tcp dial %s: %w", r.Server, err)
+		return nil, nil, 0, fmt.Errorf("dns tcp dial %s: %w", r.Server, err)
 	}
 	defer conn.Close()
 
@@ -95,24 +105,41 @@ func (r *Resolver) query(ctx context.Context, msg []byte) ([]net.IP, time.Durati
 	var lenBuf [2]byte
 	binary.BigEndian.PutUint16(lenBuf[:], uint16(len(msg)))
 	if _, err := conn.Write(lenBuf[:]); err != nil {
-		return nil, 0, err
+		return nil, nil, 0, err
 	}
 	if _, err := conn.Write(msg); err != nil {
-		return nil, 0, err
+		return nil, nil, 0, err
 	}
 
 	if _, err := conn.Read(lenBuf[:]); err != nil {
-		return nil, 0, err
+		return nil, nil, 0, err
 	}
 	n := int(binary.BigEndian.Uint16(lenBuf[:]))
 	if n < 12 || n > 65535 {
-		return nil, 0, fmt.Errorf("invalid dns response length %d", n)
+		return nil, nil, 0, fmt.Errorf("invalid dns response length %d", n)
 	}
 	buf := make([]byte, n)
 	if _, err := readFull(conn, buf); err != nil {
-		return nil, 0, err
+		return nil, nil, 0, err
 	}
 	return parseAnswers(buf)
+}
+
+func rcodeString(rcode int) string {
+	switch rcode {
+	case 1:
+		return "FORMERR"
+	case 2:
+		return "SERVFAIL"
+	case 3:
+		return "NXDOMAIN"
+	case 4:
+		return "NOTIMP"
+	case 5:
+		return "REFUSED"
+	default:
+		return fmt.Sprintf("RCODE%d", rcode)
+	}
 }
 
 func deadline(ctx context.Context, fallback time.Duration) time.Time {
@@ -135,11 +162,10 @@ func readFull(c net.Conn, b []byte) (int, error) {
 }
 
 func buildQuery(name string, qtype uint16) []byte {
-	// header 12 bytes, ID=0x1234, RD=1
 	buf := make([]byte, 12)
 	binary.BigEndian.PutUint16(buf[0:2], 0x1234)
-	buf[2] = 0x01 // flags: recursion desired
-	binary.BigEndian.PutUint16(buf[4:6], 1) // QDCOUNT
+	buf[2] = 0x01 // RD
+	binary.BigEndian.PutUint16(buf[4:6], 1)
 
 	labels := strings.Split(name, ".")
 	for _, l := range labels {
@@ -150,18 +176,20 @@ func buildQuery(name string, qtype uint16) []byte {
 		buf = append(buf, l...)
 	}
 	buf = append(buf, 0)
-	buf = append(buf, 0, byte(qtype>>8), byte(qtype))
-	buf = append(buf, 0, 0x01) // IN class
+	buf = append(buf, 0, byte(qtype>>8), byte(qtype), 0, 0x01)
+	// EDNS0 OPT — VPC Route 53 often expects this
+	binary.BigEndian.PutUint16(buf[10:12], 1)
+	buf = append(buf, 0, 0, 41, 0x04, 0xd0, 0, 0, 0, 0, 0, 0)
 	return buf
 }
 
-func parseAnswers(msg []byte) ([]net.IP, time.Duration, error) {
+func parseAnswers(msg []byte) ([]net.IP, []string, time.Duration, error) {
 	if len(msg) < 12 {
-		return nil, 0, fmt.Errorf("short dns message")
+		return nil, nil, 0, fmt.Errorf("short dns message")
 	}
-	rcode := msg[3] & 0x0f
+	rcode := int(msg[3] & 0x0f)
 	if rcode != 0 {
-		return nil, 0, fmt.Errorf("dns rcode %d", rcode)
+		return nil, nil, 0, fmt.Errorf("dns %s (%d)", rcodeString(rcode), rcode)
 	}
 	qd := int(binary.BigEndian.Uint16(msg[4:6]))
 	an := int(binary.BigEndian.Uint16(msg[6:8]))
@@ -170,17 +198,18 @@ func parseAnswers(msg []byte) ([]net.IP, time.Duration, error) {
 		var err error
 		off, err = skipName(msg, off)
 		if err != nil {
-			return nil, 0, err
+			return nil, nil, 0, err
 		}
-		off += 4 // type + class
+		off += 4
 	}
 	var ips []net.IP
+	var cnames []string
 	var minTTL uint32 = ^uint32(0)
 	for i := 0; i < an; i++ {
 		var err error
 		off, err = skipName(msg, off)
 		if err != nil {
-			return nil, 0, err
+			return nil, nil, 0, err
 		}
 		if off+10 > len(msg) {
 			break
@@ -198,21 +227,48 @@ func parseAnswers(msg []byte) ([]net.IP, time.Duration, error) {
 			minTTL = ttl
 		}
 		switch typ {
-		case 1: // A
+		case 1:
 			if len(rdata) == 4 {
 				ips = append(ips, net.IP(rdata))
 			}
-		case 28: // AAAA
+		case 28:
 			if len(rdata) == 16 {
 				ips = append(ips, net.IP(rdata))
 			}
-		case 5: // CNAME — skip; follow-up queries would need another round
+		case 5:
+			if c, err := readNameAt(msg, off-rdlen); err == nil && c != "" {
+				cnames = append(cnames, strings.TrimSuffix(strings.ToLower(c), "."))
+			}
 		}
 	}
 	if minTTL == ^uint32(0) {
 		minTTL = 60
 	}
-	return ips, time.Duration(minTTL) * time.Second, nil
+	return ips, cnames, time.Duration(minTTL) * time.Second, nil
+}
+
+func readNameAt(msg []byte, off int) (string, error) {
+	var labels []string
+	for jumps := 0; off < len(msg) && jumps < 20; jumps++ {
+		l := int(msg[off])
+		off++
+		if l == 0 {
+			return strings.Join(labels, "."), nil
+		}
+		if l&0xc0 == 0xc0 {
+			if off >= len(msg) {
+				return "", fmt.Errorf("bad compression")
+			}
+			off = (int(l&0x3f) << 8) | int(msg[off])
+			continue
+		}
+		if off+l > len(msg) {
+			return "", fmt.Errorf("label out of range")
+		}
+		labels = append(labels, string(msg[off:off+l]))
+		off += l
+	}
+	return "", fmt.Errorf("name too long")
 }
 
 func skipName(msg []byte, off int) (int, error) {
