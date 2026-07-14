@@ -1,0 +1,8 @@
+# ponytail: minimal Go ignores; add vendor/ if you vendor later
+*.exe
+*.test
+*.out
+/railbird
+.idea/
+.vscode/
+.DS_Store
