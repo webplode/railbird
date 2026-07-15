@@ -24,6 +24,91 @@ type fakeMesh struct {
 	listeners atomic.Int64
 }
 
+type acceptResult struct {
+	conn net.Conn
+	err  error
+}
+
+// scriptedListener is a deterministic listener used by supervisor tests. An
+// Accept call blocks until the test supplies a result or closes the listener.
+// It deliberately uses channels rather than loopback ports or scheduler
+// sleeps, so tests can place failures exactly relative to admission changes.
+type scriptedListener struct {
+	results chan acceptResult
+	closed  chan struct{}
+	once    sync.Once
+}
+
+func newScriptedListener() *scriptedListener {
+	return &scriptedListener{
+		results: make(chan acceptResult),
+		closed:  make(chan struct{}),
+	}
+}
+
+func (l *scriptedListener) Accept() (net.Conn, error) {
+	select {
+	case result := <-l.results:
+		return result.conn, result.err
+	case <-l.closed:
+		return nil, net.ErrClosed
+	}
+}
+
+func (l *scriptedListener) Close() error {
+	l.once.Do(func() { close(l.closed) })
+	return nil
+}
+
+func (l *scriptedListener) Addr() net.Addr {
+	return stubAddr("scripted-listener")
+}
+
+func (l *scriptedListener) yield(conn net.Conn, err error) {
+	l.results <- acceptResult{conn: conn, err: err}
+}
+
+type stubAddr string
+
+func (a stubAddr) Network() string { return "test" }
+func (a stubAddr) String() string  { return string(a) }
+
+// trackedConn records the first Close while retaining net.Pipe's full-duplex
+// behavior. Tests wait on closed before asserting that no handler work ran.
+type trackedConn struct {
+	net.Conn
+	closed chan struct{}
+	once   sync.Once
+}
+
+func newTrackedPipe(t *testing.T) (*trackedConn, net.Conn) {
+	t.Helper()
+	server, client := net.Pipe()
+	tracked := &trackedConn{Conn: server, closed: make(chan struct{})}
+	t.Cleanup(func() {
+		_ = tracked.Close()
+		_ = client.Close()
+	})
+	return tracked, client
+}
+
+func (c *trackedConn) Close() error {
+	c.once.Do(func() {
+		close(c.closed)
+		_ = c.Conn.Close()
+	})
+	return nil
+}
+
+func awaitSignal(t *testing.T, signal <-chan struct{}, description string) {
+	t.Helper()
+	select {
+	case <-signal:
+	case <-time.After(time.Second):
+		t.Fatalf("timed out waiting for %s", description)
+	}
+}
+
 func (m *fakeMesh) ListenTCP(address string) (net.Listener, error) {
 	m.listeners.Add(1)
 	if strings.HasPrefix(address, ":") {
