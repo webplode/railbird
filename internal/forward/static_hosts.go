@@ -6,34 +6,6 @@ import (
 	"strings"
 )
 
-// ParseStaticHosts parses NB_STATIC_HOSTS: comma-separated host=ip entries.
-func ParseStaticHosts(raw string) map[string]net.IP {
-	raw = strings.TrimSpace(raw)
-	if raw == "" {
-		return nil
-	}
-	m := make(map[string]net.IP)
-	for _, part := range strings.Split(raw, ",") {
-		part = strings.TrimSpace(part)
-		if part == "" {
-			continue
-		}
-		host, ipStr, ok := strings.Cut(part, "=")
-		host = strings.TrimSuffix(strings.ToLower(strings.TrimSpace(host)), ".")
-		ipStr = strings.TrimSpace(ipStr)
-		if !ok || host == "" || ipStr == "" {
-			continue
-		}
-		if ip := net.ParseIP(ipStr); ip != nil {
-			m[host] = ip
-		}
-	}
-	if len(m) == 0 {
-		return nil
-	}
-	return m
-}
-
 type staticResolver struct {
 	hosts map[string]net.IP
 	next  HostResolver
