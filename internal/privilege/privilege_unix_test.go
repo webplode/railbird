@@ -402,7 +402,9 @@ func TestRequireRuntimeIdentity(t *testing.T) {
 		{name: "effective uid", mutate: func(f *fakeSystem) { f.euid++ }},
 		{name: "real gid", mutate: func(f *fakeSystem) { f.gid++ }},
 		{name: "effective gid", mutate: func(f *fakeSystem) { f.egID++ }},
-		{name: "supplementary group", mutate: func(f *fakeSystem) { f.groups = []int{testGID} }},
+		{name: "runtime duplicates primary gid", mutate: func(f *fakeSystem) { f.groups = []int{testGID} }, wantOK: true},
+		{name: "foreign supplementary group", mutate: func(f *fakeSystem) { f.groups = []int{testGID + 1} }},
+		{name: "primary and foreign supplementary groups", mutate: func(f *fakeSystem) { f.groups = []int{testGID, testGID + 1} }},
 		{name: "groups read failure", fail: "getgroups"},
 	}
 	for _, tt := range tests {

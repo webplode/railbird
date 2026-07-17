@@ -88,7 +88,8 @@ func PrepareBootstrap(root string, uid, gid int, classify func() error) error {
 }
 
 // RequireRuntimeIdentity refuses to serve unless the process has exactly the
-// requested real/effective uid and gid and no supplementary groups.
+// requested real/effective uid and gid and no supplementary group identities
+// beyond a runtime-provided duplicate of the requested primary gid.
 func RequireRuntimeIdentity(uid, gid int) error {
 	return requireRuntimeIdentity(uid, gid, systemOperations)
 }
@@ -228,8 +229,10 @@ func requireRuntimeIdentity(uid, gid int, ops operations) error {
 	if gotUID, gotEUID, gotGID, gotEGID := ops.getuid(), ops.geteuid(), ops.getgid(), ops.getegid(); gotUID != uid || gotEUID != uid || gotGID != gid || gotEGID != gid {
 		return fmt.Errorf("%w: uid=%d euid=%d gid=%d egid=%d, require %d:%d", ErrIdentityMismatch, gotUID, gotEUID, gotGID, gotEGID, uid, gid)
 	}
-	if len(groups) != 0 {
-		return fmt.Errorf("%w: supplementary groups=%v, require none", ErrIdentityMismatch, groups)
+	for _, group := range groups {
+		if group != gid {
+			return fmt.Errorf("%w: supplementary groups=%v, allow none or primary gid %d only", ErrIdentityMismatch, groups, gid)
+		}
 	}
 	return nil
 }

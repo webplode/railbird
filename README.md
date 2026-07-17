@@ -125,7 +125,8 @@ available to pre-deploy commands and `railway run` executes locally.
    root. A safe root-owned mount changes ownership on the mount-root inode only;
    an already-65532 root causes no ownership mutation. Descendants are never
    recursively changed. It classifies the complete same-device contents before
-   dropping irreversibly to UID/GID 65532 with no supplementary groups.
+   dropping irreversibly to UID/GID 65532 with no supplementary group identity
+   beyond a runtime-provided duplicate of primary GID 65532.
 4. Empty state starts a new candidate. One safe unprepared candidate may be
    removed. Before any remote effect, the candidate records a non-secret digest
    binding the SetupKey, management URL, device name, DNS labels, and mode. A
@@ -139,7 +140,8 @@ available to pre-deploy commands and `railway run` executes locally.
    protected Railway secret. Remove `NB_SETUP_KEY` and `RAILWAY_RUN_UID`, set
    `NB_IDENTITY_MODE=persistent` and `NB_EXPECTED_PEER_PUBLIC_KEY`, restore
    `/ready`, `ON_FAILURE`, 60s drain, one replica, and overlap `0`, then deploy.
-   Confirm the serving process is UID:GID 65532 with no supplementary groups.
+   Confirm the serving process is UID:GID 65532 with no supplementary group
+   identity beyond a runtime-provided duplicate of primary GID 65532.
 
 Do not retry bootstrap blindly after a failure. Keep the original SetupKey and
 registration profile available while a prepared candidate is recoverable,
